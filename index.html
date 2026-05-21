@@ -42638,6 +42638,35 @@ window._wbSetupAdvForBattle = function(opts){
     // 設定 G.p1 / G.p2
     if(opts.p1 && Array.isArray(opts.p1)) G.p1 = opts.p1;
     if(opts.p2 && Array.isArray(opts.p2)) G.p2 = opts.p2;
+    // ═══════════════════════════════════════════════════════════════
+    // ★ v3.4.17 — 二重保險:日本三大妖怪 (大天狗/酒吞童子/玉藻前) 在 p1
+    //   若被誤設成 BOSS 版能力 (hp>=100), 強制套回 JP_BOSS_HERO_STATS 英雄版
+    // ───────────────────────────────────────────────────────────────
+    // 修復:世界 BOSS 戰建構這 3 隻時, 雖然 newHero('p1') 理論上會套英雄版,
+    //       但因獨立入口 (_wbSetupAdvForBattle) 跳過主程式的二重保險區段,
+    //       一旦某個路徑漏套 (例如 wireToHero 反序列化用 wire 值覆蓋),
+    //       這 3 隻就會帶著 BOSS 級數值進戰場。
+    //   行為與主程式 13727 行的二重保險完全一致。
+    // ═══════════════════════════════════════════════════════════════
+    try{
+      if(typeof JP_BOSS_HERO_STATS !== 'undefined' && Array.isArray(G.p1)){
+        G.p1.forEach(h => {
+          if(!h) return;
+          const _ovr = JP_BOSS_HERO_STATS[h.name];
+          if(_ovr && h.hp >= 100){
+            console.warn('[WB G.p1 二重保險] '+h.name+' 偵測到 BOSS 版 hp='+h.hp+', atk='+h.atk+', sp='+h.sp+', spd='+h.spd+' → 強制套英雄版 hp='+_ovr.hp+', atk='+_ovr.atk+', sp='+_ovr.sp+', spd='+_ovr.spd);
+            h.hp  = _ovr.hp;
+            h.atk = _ovr.atk;
+            h.sp  = _ovr.sp;
+            h.spd = _ovr.spd;
+            // curHp 若已是滿血則一起改, 否則保留 (例如雲端殘血同步)
+            if(typeof h.curHp !== 'number' || h.curHp <= 0 || h.curHp > _ovr.hp){
+              h.curHp = _ovr.hp;
+            }
+          }
+        });
+      }
+    }catch(e){ console.error('[WB G.p1 二重保險] 失敗', e); }
     try{
       if(typeof _applyTaiwanTreasureToHero === 'function' && Array.isArray(G.p1)){
         G.p1.forEach(h => {
@@ -74079,7 +74108,7 @@ window._filterChangelogForDisplay = function(entries){
 
 
 
-window._GAME_LOADED_VERSION = 'v3.4.16';
+window._GAME_LOADED_VERSION = 'v3.4.17';
 // ★ v1.0.20260423.6000 — 自動同步首頁右下角版本顯示,免得手動忘記改
 try{
   const _vb = document.getElementById('version-badge');

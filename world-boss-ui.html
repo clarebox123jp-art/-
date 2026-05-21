@@ -1613,7 +1613,9 @@
   /* 4 卡橫排:用 flex 讓他們等寬不會超出 */
   .wb-tc-slots{
     display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
-    flex:1;min-height:0;overflow:hidden;
+    flex:1;min-height:0;
+    /* ★ FIX 20260521(d) — 不再 hidden, 讓內層 .wb-tc-slot 各自捲動 */
+    overflow:visible;
     margin-bottom:5px;
   }
   .wb-tc-slot{
@@ -1623,6 +1625,21 @@
     display:flex;flex-direction:column;gap:3px;
     transition:all 0.25s;position:relative;
     min-height:0;
+    /* ★ FIX 20260521(d) — 每個槽位獨立可捲動, 不管裡面內容多長都能滑到底部按鈕 */
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    /* 隱藏 scrollbar 視覺但保留功能(iPad Safari) */
+    scrollbar-width:thin;
+  }
+  .wb-tc-slot::-webkit-scrollbar{
+    width:4px;
+  }
+  .wb-tc-slot::-webkit-scrollbar-thumb{
+    background:rgba(168,132,255,0.4);
+    border-radius:2px;
+  }
+  .wb-tc-slot::-webkit-scrollbar-track{
+    background:transparent;
   }
   .wb-tc-slot.me{border-color:#ffe066;box-shadow:0 0 16px rgba(255,224,102,0.4);}
   .wb-tc-slot.ready{
@@ -1744,46 +1761,86 @@
   .wb-tc-leave-btn:hover{background:rgba(255,80,80,0.35);}
 
   /* ★ FIX 20260517(r) — 空槽兩個動作按鈕(邀請隊友 / 房主指派) */
+  /* ★ FIX 20260521(c) — 按鈕從底部移到槽位中央, 避免 iPad 按到下方被擋的問題.
+     原本 margin-top:auto 推到卡片底部, 學生反應 iPad 按不到. 改成在 flex 中央,
+     並加大 padding/字, 觸控更友善. */
   .wb-tc-slot-actions{
-    display:flex;flex-direction:column;gap:10px;width:100%;
-    margin-top:auto;padding:0 8px 4px;
+    display:flex;flex-direction:column;gap:14px;width:100%;
+    padding:14px 10px 8px;
+    /* 不再用 margin-top:auto 推底 — 直接在中央區塊 */
   }
   .wb-tc-slot-action-btn{
-    padding:10px 8px;font-size:22px;font-weight:800;letter-spacing:1px;
-    border-radius:9px;cursor:pointer;font-family:inherit;
-    transition:all 0.18s;line-height:1.2;
-    border:2px solid;
+    padding:18px 10px;font-size:24px;font-weight:800;letter-spacing:1.2px;
+    border-radius:11px;cursor:pointer;font-family:inherit;
+    transition:all 0.18s;line-height:1.25;
+    border:2.5px solid;
+    /* iPad 觸控最低高度 */
+    min-height:64px;
+    /* 點按反饋 */
+    user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
   }
   .wb-tc-slot-action-btn.invite{
-    background:linear-gradient(135deg,rgba(93,202,165,0.22),rgba(58,165,128,0.12));
-    border-color:#5dcaa5;color:#9fe8c8;
+    background:linear-gradient(135deg,rgba(93,202,165,0.28),rgba(58,165,128,0.16));
+    border-color:#5dcaa5;color:#cfeedd;
+    box-shadow:0 0 10px rgba(93,202,165,0.25);
   }
   .wb-tc-slot-action-btn.invite:hover{
     background:linear-gradient(135deg,rgba(93,202,165,0.45),rgba(58,165,128,0.3));
     color:#fff;transform:translateY(-1px);
+    box-shadow:0 4px 16px rgba(93,202,165,0.5);
+  }
+  .wb-tc-slot-action-btn.invite:active{
+    transform:translateY(1px);
   }
   .wb-tc-slot-action-btn.assign{
-    background:linear-gradient(135deg,rgba(255,170,68,0.22),rgba(204,120,40,0.12));
-    border-color:#ffaa44;color:#ffd699;
+    background:linear-gradient(135deg,rgba(255,170,68,0.28),rgba(204,120,40,0.16));
+    border-color:#ffaa44;color:#ffe2b2;
+    box-shadow:0 0 10px rgba(255,170,68,0.25);
   }
   .wb-tc-slot-action-btn.assign:hover{
     background:linear-gradient(135deg,rgba(255,170,68,0.45),rgba(204,120,40,0.3));
     color:#fff;transform:translateY(-1px);
+    box-shadow:0 4px 16px rgba(255,170,68,0.5);
+  }
+  .wb-tc-slot-action-btn.assign:active{
+    transform:translateY(1px);
   }
   .wb-tc-slot-action-btn:disabled{
     opacity:0.4;cursor:not-allowed;
     background:rgba(60,60,60,0.3);color:#888;border-color:#666;
+    box-shadow:none;
+  }
+  .wb-tc-slot-action-btn:disabled:hover{
+    transform:none;box-shadow:none;
   }
 
   /* 空槽預設狀態(未選動作前的提示) */
+  /* ★ FIX 20260521(c) — 提示文字縮一點, 把垂直空間讓給按鈕 */
   .wb-tc-slot-empty-hint{
-    flex:1;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:12px;
-    color:#888;font-size:22px;letter-spacing:1.5px;
-    padding:18px 8px;
+    display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:6px;
+    color:#888;font-size:17px;letter-spacing:1px;line-height:1.4;
+    padding:6px 8px 0;
+    flex-shrink:0;  /* 不要佔太多空間, 把空間留給按鈕 */
   }
   .wb-tc-slot-empty-hint .wb-tc-empty-icon{
-    font-size:56px;opacity:0.5;
+    font-size:38px;opacity:0.5;
+  }
+  /* iPad (≤1180px) 空槽元素再壓縮一些 */
+  @media (max-width:1180px){
+    .wb-tc-slot-empty-hint{
+      font-size:14px;gap:4px;padding:4px 6px 0;
+    }
+    .wb-tc-slot-empty-hint .wb-tc-empty-icon{
+      font-size:28px;
+    }
+    .wb-tc-slot-actions{
+      gap:10px;padding:10px 8px 6px;
+    }
+    .wb-tc-slot-action-btn{
+      padding:14px 8px;font-size:18px;min-height:54px;letter-spacing:0.8px;
+      border-radius:9px;
+    }
   }
 
 
@@ -5224,7 +5281,9 @@
             : `<button class="wb-tc-slot-action-btn invite" onclick="_wbUiOpenInviteFriends()">
                 📧 邀請隊友
               </button>`;
-          html += `<div class="wb-tc-slot empty wb-tc-slot-npc">
+          // ★ FIX 20260521(c) — 加 wb-tc-slot-empty-initial class, 讓 CSS 把
+          //   提示文字 + 按鈕整組垂直置中, 按鈕位於卡片視覺中央
+          html += `<div class="wb-tc-slot empty wb-tc-slot-npc wb-tc-slot-empty-initial">
             <div class="wb-tc-slot-head">
               <span class="wb-tc-slot-num-lbl">槽位 ${i+1}</span>
               <span class="wb-tc-slot-player-name" style="color:#888;">👤 待加入</span>
@@ -5245,7 +5304,7 @@
           </div>`;
         }else{
           // 非房主看到的空槽:只顯示等待提示
-          html += `<div class="wb-tc-slot empty wb-tc-slot-npc">
+          html += `<div class="wb-tc-slot empty wb-tc-slot-npc wb-tc-slot-empty-initial">
             <div class="wb-tc-slot-head">
               <span class="wb-tc-slot-num-lbl">槽位 ${i+1}</span>
               <span class="wb-tc-slot-player-name" style="color:#888;">👤 待加入</span>
@@ -6573,6 +6632,9 @@
 
     // ★ FIX 20260519(v9) — 為空槽挑一個合適的元素 + 英雄
     //   優先補缺的元素;若都補齊就用房主元素;英雄優先不重複
+    // ★ FIX 20260521(b) — 解鎖英雄不夠時 (例如剛開始遊戲的玩家只解 1 隻),
+    //   不要 fallback 到房主英雄 → 4 槽重複很醜。改成從 HERO_DB 撈備用
+    //   非 BOSS / 非高 HP 英雄補上,讓自動補位陣容看起來像 4 隻不同角色。
     const _pickAutoNpcLoadout = function(slotIdx){
       // 元素:先用 missing 池,空了再用房主的
       let _elem = null;
@@ -6593,12 +6655,41 @@
           if(_candidates.length > 0){
             // 取陣列前面的(可能是按等級排好的)
             _heroName = _candidates[0];
-          }else{
-            // 全部都用過了 → 退回用房主英雄(這時 4 個槽就會重複,但屬性還是齊的)
-            _heroName = _hostHeroName;
+          }
+        }
+        // ★ FIX 20260521(b) — 已解鎖英雄不夠 → 從 HERO_DB 全表撈備用,避免重複
+        //   (這個 fallback 確保新玩家、解鎖少時仍能組出 4 隻不同英雄)
+        // ★ v3.4.17 — 自動補位時不抽 SUMMON_RARES (三大妖怪+巫女),
+        //   原因:(1) 大部分玩家還沒解鎖, 自動填上反而怪
+        //         (2) 三大妖怪在 HERO_DB 是 BOSS 版高 HP, 雖然 newHero('p1') 會套
+        //             JP_BOSS_HERO_STATS 改成英雄版, 但若任何路徑漏套就會出現 BOSS 級 HP
+        //   要選三大妖怪請走「房主指派」明確選擇, 不要自動.
+        if(!_heroName && typeof HERO_DB !== 'undefined'){
+          const _SUMMON_RARES = (typeof SUMMON_RARE_HEROES !== 'undefined' && Array.isArray(SUMMON_RARE_HEROES))
+            ? SUMMON_RARE_HEROES : ['大天狗','玉藻前','酒吞童子','巫女'];
+          const _isBoss = function(n){
+            if(typeof BOSS_NAMES === 'undefined' || !BOSS_NAMES.includes(n)) return false;
+            return true;  // 自動補位:BOSS_NAMES 內全擋,不豁免 SUMMON_RARES
+          };
+          const _backupList = Object.keys(HERO_DB).filter(n => {
+            if(_isBoss(n)) return false;
+            const _h = HERO_DB[n];
+            if(!_h || _h.isBoss || _h.isWorldBoss) return false;
+            // 自動補位:HP>=1000 全擋 (不豁免 SUMMON_RARES, 避免抓到 BOSS 級數值)
+            if(_h.hp != null && _h.hp >= 1000) return false;
+            // 三大妖怪+巫女也排除 (自動補位不抽)
+            if(_SUMMON_RARES.indexOf(n) >= 0) return false;
+            // 不能跟已用過的重複
+            if(_usedHeroes.has(n)) return false;
+            return true;
+          });
+          if(_backupList.length > 0){
+            _heroName = _backupList[0];
+            console.log('[WB-AutoNpc] 解鎖英雄不夠, 從 HERO_DB 備用清單抽:', _heroName);
           }
         }
       }catch(_){}
+      // 最終 fallback:真的撈不到 (HERO_DB 都沒了極端情境) 才用房主英雄
       if(!_heroName) _heroName = _hostHeroName;
       _usedHeroes.add(_heroName);
       return { heroName: _heroName, element: _elem };
