@@ -33307,6 +33307,23 @@ function _gpIsAnyLegitModalOpen(){
         if(_phaseIdle && _miniPhaseIdle && _noBossCb && _noMiniCb){
           continue;
         }
+        // ★ v3.4.18 — 殭屍 _miniQuizOnDone 檢測:
+        //   即使 _miniQuizOnDone 非空,若已掛超過 12 秒且 phase 已非 asking,
+        //   = 救援過程中 onDone 被重設但題目從未真正出現 → 殭屍 callback,清掉算孤兒。
+        //   12 秒留出題目正常作答時間,真正在答題的玩家不會被誤殺。
+        if(!_noMiniCb && _miniPhaseIdle){
+          const _setAt = window._miniQuizOnDoneSetAt || 0;
+          if(_setAt > 0 && (Date.now() - _setAt) > 12000){
+            console.warn('[_gpIsAnyLegitModalOpen] 偵測殭屍 _miniQuizOnDone(掛超 '
+              + Math.round((Date.now()-_setAt)/1000) + ' 秒且 mini phase=idle),清掉並視為孤兒');
+            try{
+              window._miniQuizOnDone = null;
+              window._miniQuizCurrentQ = null;
+              window._miniQuizOnDoneSetAt = 0;
+            }catch(_){}
+            continue;
+          }
+        }
       }catch(_){}
     }
     return true;
@@ -37894,10 +37911,49 @@ document.addEventListener('visibilitychange', function(){
           if(!_el) continue;
           const _shown = (_el.classList && _el.classList.contains('show'))
                         || (_el.style && _el.style.display && _el.style.display !== 'none' && _el.offsetParent !== null);
-          if(_shown){
-            console.log('[iPad 回前台 nudge] 偵測到合法 overlay 顯示中(' + _id + '),不介入');
-            return;
+          if(!_shown) continue;
+          // ★ v3.4.18 — 修 BUG 1:玩家 11:46 卡死報告
+          //   症狀:救援後 quiz overlay 仍 .show 但 _advQuizPhase=idle、_advQuizResolveCb=null、_gamePaused=true,
+          //         iPad nudge 看到 overlay .show 直接 return,根本不介入 → 玩家卡死無解。
+          //   修法:與 _gpIsAnyLegitModalOpen (line 33287) 的孤兒檢測對齊 —
+          //         adv-quiz-overlay 若 phase=idle 且兩種 cb 都沒在跑 = 孤兒 overlay,
+          //         不算合法 modal,nudge 應該介入救援。
+          if(_id === 'adv-quiz-overlay'){
+            try{
+              const _phaseIdle = (typeof _advQuizPhase === 'undefined' || _advQuizPhase === 'idle' || !_advQuizPhase);
+              const _miniPhaseIdle = (typeof window._miniQuizPhase === 'undefined'
+                                      || window._miniQuizPhase === null
+                                      || window._miniQuizPhase === 'idle');
+              const _noBossCb = !(typeof _advQuizResolveCb !== 'undefined' && _advQuizResolveCb);
+              const _noMiniCb = !(typeof window._miniQuizOnDone === 'function');
+              if(_phaseIdle && _miniPhaseIdle && _noBossCb && _noMiniCb){
+                console.warn('[iPad 回前台 nudge] adv-quiz-overlay 顯示中但 phase=idle 兩 cb 都空 = 孤兒 overlay,強制關閉並繼續救援');
+                try{
+                  _el.classList.remove('show');
+                  _el.style.display = 'none';
+                }catch(_){}
+                continue;  // 視為孤兒,不算 legit,跳過此 id 繼續檢查其他 modal
+              }
+              // ★ v3.4.18 — 殭屍 _miniQuizOnDone 檢測(與 _gpIsAnyLegitModalOpen 對齊)
+              if(!_noMiniCb && _miniPhaseIdle){
+                const _setAt = window._miniQuizOnDoneSetAt || 0;
+                if(_setAt > 0 && (Date.now() - _setAt) > 12000){
+                  console.warn('[iPad 回前台 nudge] 偵測殭屍 _miniQuizOnDone(掛超 '
+                    + Math.round((Date.now()-_setAt)/1000) + ' 秒且 mini phase=idle),清掉並繼續救援');
+                  try{
+                    window._miniQuizOnDone = null;
+                    window._miniQuizCurrentQ = null;
+                    window._miniQuizOnDoneSetAt = 0;
+                    _el.classList.remove('show');
+                    _el.style.display = 'none';
+                  }catch(_){}
+                  continue;
+                }
+              }
+            }catch(_){}
           }
+          console.log('[iPad 回前台 nudge] 偵測到合法 overlay 顯示中(' + _id + '),不介入');
+          return;
         }
 
         const _actor = G.activeChar;
@@ -44178,6 +44234,31 @@ function exitAdventureMode(){
     window._wbInWorldBossMode = false;
     window._wbSoloPracticeMode = false;
     window._wbAdvBattleEnded = true;
+    // ★ v3.4.18 — 修 BUG:從世界 BOSS 戰中途退出後,_wbClientMode/_wbConnectedClientMode/_wbConnectedHostMode
+    //   殘留 true,導致玩家後續進入「日本關小怪戰」時,selMove/doRest/execBurst 仍被 client patch 攔截,
+    //   一直印 [WB-Client v6] 樂觀:actor 不存在或已行動,跳過 — 玩家點按鈕完全沒反應。
+    //   原 reset 只在 _wbHandleBattleEnd 結算路徑(world-boss.js line ~2872),
+    //   中途透過 _wbBackToStageSelect/_wbExit/exitAdventureMode 退出時走不到,故在此補清。
+    //   也清掉 _wbClientForceCheckWin / _wbClientOptimistic / _wbClientAnimEndTs 等附屬旗標。
+    try{
+      const _wasClientMode = !!window._wbClientMode;
+      const _wasHostMode = !!window._wbConnectedHostMode;
+      window._wbClientMode = false;
+      window._wbConnectedClientMode = false;
+      window._wbConnectedHostMode = false;
+      window._wbClientForceCheckWin = false;
+      window._wbClientOptimistic = false;
+      window._wbClientAnimEndTs = 0;
+      window._wbClientFirstBattleUpdate = true;
+      window._wbClientLastVersion = 0;
+      if(window._wbClientPendingApplyTimer){
+        try{ clearTimeout(window._wbClientPendingApplyTimer); }catch(_){}
+        window._wbClientPendingApplyTimer = null;
+      }
+      if(_wasClientMode || _wasHostMode){
+        console.log('[exitAdventureMode] ✅ 清掉殘留的世界 BOSS 連線旗標 (clientMode=' + _wasClientMode + ', hostMode=' + _wasHostMode + ')');
+      }
+    }catch(_eWbFlags){ console.warn('[exitAdventureMode] 清世界 BOSS 連線旗標失敗', _eWbFlags); }
     // 清答題相關狀態 (避免下次重進時殘留答對次數)
     try{
       window._wbQuizState = {};
@@ -50062,6 +50143,7 @@ function _startQuizVisibilityCheck(reason){
           const _cb = window._miniQuizOnDone;
           window._miniQuizOnDone = null;
           window._miniQuizCurrentQ = null;
+          window._miniQuizOnDoneSetAt = 0;  // ★ v3.4.18 — 同步清時間戳
           // ★ v3.4.13 — 救援時傳 {correct:false},與寵物事件路徑相容
           //   (寵物事件 onDone 簽名是 function(res){ ok = res.correct; },沒參數會走錯)
           try{ _cb({correct:false}); }catch(_eCb){ console.error('[題目可見性] _miniQuizOnDone 拋例外', _eCb); }
@@ -68711,6 +68793,9 @@ function _advMiniQuizAsk(onDone) {
   window._miniQuizOnDone = onDone;
   window._miniQuizCurrentQ = q;
   window._miniQuizPhase = 'asking';
+  // ★ v3.4.18 — 記錄 onDone 設定時間戳,讓 _gpIsAnyLegitModalOpen 與 iPad nudge 能判斷
+  //   「onDone 已掛超過 X 秒但 overlay 沒 .show」= 殭屍 callback,該救援
+  window._miniQuizOnDoneSetAt = Date.now();
 
   const qOv = document.getElementById('adv-quiz-overlay');
   if(!qOv){ if(onDone) onDone(); return; }
@@ -69031,6 +69116,7 @@ function _advMiniQuizSubmit(letter, isCorrect) {
       window._miniQuizOnDone = null;
       window._miniQuizCurrentQ = null;
       window._miniQuizPhase = null;
+      window._miniQuizOnDoneSetAt = 0;  // ★ v3.4.18 — 同步清時間戳
       // ★ v1.0.20260421.3000c — 寵物事件答題模式：跳過答對獎勵視窗，直接進寵物對白
       if(window._tgPetQuizMode){
         window._tgPetQuizMode = false;
@@ -69081,6 +69167,7 @@ function _advMiniQuizSubmit(letter, isCorrect) {
       window._miniQuizOnDone = null;
       window._miniQuizCurrentQ = null;
       window._miniQuizPhase = null;
+      window._miniQuizOnDoneSetAt = 0;  // ★ v3.4.18 — 同步清時間戳
       // ★ v1.0.20260421.3000c — 答錯時也要清寵物事件旗標
       if(window._tgPetQuizMode) window._tgPetQuizMode = false;
       if(onDone) onDone({correct:false});
@@ -74108,7 +74195,7 @@ window._filterChangelogForDisplay = function(entries){
 
 
 
-window._GAME_LOADED_VERSION = 'v3.4.17';
+window._GAME_LOADED_VERSION = 'v3.4.18';
 // ★ v1.0.20260423.6000 — 自動同步首頁右下角版本顯示,免得手動忘記改
 try{
   const _vb = document.getElementById('version-badge');
